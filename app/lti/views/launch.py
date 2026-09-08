@@ -7,7 +7,11 @@ from lti.services.launch import LTILaunchService
 from lti.views.lti import error_page
 from lti_tool.types import LtiHttpRequest
 from lti_tool.views import LtiLaunchBaseView
+from lti_tool.utils import sync_data_from_launch
+from lti_tool.constants import SESSION_KEY
 from pylti1p3.exception import LtiException
+
+from lti.utils import get_launch_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +23,27 @@ class ApplicationLaunchView(LtiLaunchBaseView):
         Overrides django-lti's post method in order to intercept validation exceptions
         """
         try:
-            return super().post(request, *args, **kwargs)
+            if request.POST.get('lti_storage_target', None) != 'post_message_forwarding':
+                return super().post(request, *args, **kwargs)
+
+            request.session.clear()
+            lti_launch = get_launch_from_request(request)
+            sync_data_from_launch(lti_launch)
+            self.launch_setup(request, lti_launch)
+            if not lti_launch.deployment.is_active:
+                return self.handle_inactive_deployment(request, lti_launch)
+            request.session[SESSION_KEY] = lti_launch.get_launch_id()
+            request.lti_launch = lti_launch
+            if request.lti_launch.is_resource_launch:
+                return self.handle_resource_launch(request, lti_launch)
+            if request.lti_launch.is_deep_link_launch:
+                return self.handle_deep_linking_launch(request, lti_launch)
+            if request.lti_launch.is_submission_review_launch:
+                return self.handle_submission_review_launch(request, lti_launch)
+            if request.lti_launch.is_data_privacy_launch:
+                return self.handle_data_privacy_launch(request, lti_launch)
         except LtiException:
-            logger.error("LTI: Launch validation failed", exc_info=True)
+            logger.error(f"LTI: Launch validation failed", exc_info=True)
             return error_page(request, "error_launch_validation")
 
     def handle_resource_launch(self, request, lti_launch):
