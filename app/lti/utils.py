@@ -51,24 +51,17 @@ def store_post_message_initiation(
     )
 
 
-def claim_post_message_initiation(state: str, storage_target: str) -> dict:
+def consume_post_message_initiation(state: str, storage_target: str) -> dict:
     """Claim an initiation exactly once before rendering the get_data bridge."""
 
     initiation = cache.get(_get_cache_key("initiation", state))
     if not initiation:
-        raise LtiException("Post-message OIDC initiation not found or expired")
+        raise LtiException("Post-message OIDC initiation expired or was consumed")
 
     if initiation.get("storage_target") != storage_target:
         raise LtiException("Post-message OIDC storage target does not match")
 
-    claimed = cache.add(
-        _get_cache_key("initiation-claimed", state),
-        True,
-        timeout=_get_post_message_timeout(),
-    )
-    if not claimed:
-        raise LtiException("Post-message OIDC initiation has already been used")
-
+    cache.delete(_get_cache_key("initiation", state))
     return initiation
 
 
@@ -92,53 +85,20 @@ def consume_post_message_handoff(handoff_id: str, storage_target: str) -> dict:
 
     handoff = cache.get(_get_cache_key("handoff", handoff_id))
     if not handoff:
-        raise LtiException("Post-message OIDC handoff not found or expired")
+        raise LtiException("Post-message OIDC handoff expired or was consumed")
 
     if handoff.get("storage_target") != storage_target:
         raise LtiException("Post-message OIDC storage target does not match")
 
-    consumed = cache.add(
-        _get_cache_key("handoff-consumed", handoff_id),
-        True,
-        timeout=_get_post_message_timeout(),
-    )
-    if not consumed:
-        raise LtiException("Post-message OIDC handoff has already been used")
-
     cache.delete(_get_cache_key("handoff", handoff_id))
-    cache.delete(_get_cache_key("initiation", handoff["state"]))
     return handoff
-
-
-def validate_post_message_values(
-    handoff: dict, platform_state: str, platform_nonce: str
-) -> None:
-    """Compare the values returned by the platform with the initiation values."""
-
-    expected_state = handoff.get("state")
-    expected_nonce = handoff.get("nonce")
-    if not all(
-        isinstance(value, str)
-        for value in (
-            expected_state,
-            expected_nonce,
-            platform_state,
-            platform_nonce,
-        )
-    ):
-        raise LtiException("Post-message OIDC state or nonce is missing")
-
-    if not secrets.compare_digest(expected_state, platform_state):
-        raise LtiException("Post-message OIDC state does not match")
-
-    if not secrets.compare_digest(expected_nonce, platform_nonce):
-        raise LtiException("Post-message OIDC nonce does not match")
 
 
 def get_launch_from_request(
     request: HttpRequest, launch_id: Optional[str] = None
 ) -> LtiLaunch:
-    """Returns the DjangoMessageLaunch associated with a request.
+    """Returns the MateriaMessageLaunch associated with a request.
+    Based on the Django LTI implementation, altered to use our override message launch
 
     Optionally, a launch_id may be specified to retrieve the launch from the cache.
     """
@@ -181,4 +141,4 @@ class MateriaMessageLaunch(DjangoMessageLaunch):
         if not secrets.compare_digest(nonce_from_token, nonce_from_platform):
             raise LtiException("Post-message OIDC nonce does not match")
 
-        return super().validate_nonce()
+        return self

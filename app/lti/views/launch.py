@@ -5,11 +5,10 @@ from lti.exceptions import LTIAuthException
 from lti.services.auth import LTIAuthService
 from lti.services.launch import LTILaunchService
 from lti.utils import (
-    claim_post_message_initiation,
+    consume_post_message_initiation,
     consume_post_message_handoff,
     create_post_message_handoff,
     get_launch_from_request,
-    validate_post_message_values,
 )
 from lti.views.lti import error_page
 from lti_tool.constants import SESSION_KEY
@@ -30,23 +29,21 @@ class ApplicationLaunchView(LtiLaunchBaseView):
         try:
             storage_target = request.POST.get("lti_storage_target")
             if storage_target != "post_message_forwarding":
+                # launch using cookies if we cant use post messages
                 return super().post(request, *args, **kwargs)
 
+            # if we have not retrieved storage values yet, route to oidc_get template
             if request.POST.get("oidc_storage_complete") != "1":
                 return self.prepare_post_message_validation(request, storage_target)
 
             handoff = consume_post_message_handoff(
                 request.POST.get("handoff_id", ""), storage_target
             )
-            platform_state = request.POST.get("platform_state", "")
-            platform_nonce = request.POST.get("platform_nonce", "")
-            validate_post_message_values(handoff, platform_state, platform_nonce)
 
             launch_post = request.POST.copy()
             launch_post["state"] = handoff["state"]
             launch_post["id_token"] = handoff["id_token"]
-            launch_post["platform_state"] = platform_state
-            launch_post["platform_nonce"] = platform_nonce
+
             request.POST = launch_post
 
             request.session.clear()
@@ -62,7 +59,7 @@ class ApplicationLaunchView(LtiLaunchBaseView):
         if not state or not id_token:
             raise LtiException("Missing state or id_token")
 
-        initiation = claim_post_message_initiation(state, storage_target)
+        initiation = consume_post_message_initiation(state, storage_target)
         handoff_id = create_post_message_handoff(initiation, id_token)
         return render(
             request,

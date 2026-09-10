@@ -38,7 +38,6 @@
                 window.addEventListener('message', event => {
                     if (typeof event.data !== "object") return
                     if (event.data.subject !== "lti.get_data.response") return
-                    if (event.data.message_id !== messageId) return
                     if (event.origin !== platformOrigin) returns
                     if (event.source !== targetFrame) return
 

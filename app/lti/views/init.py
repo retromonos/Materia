@@ -44,48 +44,50 @@ class MateriaOIDCLoginInitView(OIDCLoginInitView):
 
     def get_oidc_response(self, request, registration_uuid, params):
         storage_target = params.get("lti_storage_target")
-        if storage_target == "post_message_forwarding":
-            tool_conf = DjangoToolConfig(registration_uuid)
-            launch_data_storage = CookieFreeDjangoCacheDataStorage()
-            oidc_login = DjangoOIDCLogin(
-                request, tool_conf, launch_data_storage=launch_data_storage
-            )
+        if storage_target != "post_message_forwarding":
+            return super().get_oidc_response(request, registration_uuid, params)
+        
+        tool_conf = DjangoToolConfig(registration_uuid)
+        launch_data_storage = CookieFreeDjangoCacheDataStorage()
+        oidc_login = DjangoOIDCLogin(
+            request, tool_conf, launch_data_storage=launch_data_storage
+        )
 
-            target_link_uri = params.get("target_link_uri")
-            if target_link_uri is None:
-                return HttpResponseBadRequest("Missing target_link_uri parameter.")
+        target_link_uri = params.get("target_link_uri")
+        if target_link_uri is None:
+            return HttpResponseBadRequest("Missing target_link_uri parameter.")
 
-            authorization_url = oidc_login.get_redirect_object(
-                target_link_uri
-            ).get_redirect_url()
-            parsed_redirect = urlparse(authorization_url)
-            authorization_params = parse_qs(parsed_redirect.query)
-            state = authorization_params.get("state", [None])[0]
-            nonce = authorization_params.get("nonce", [None])[0]
-            if not state or not nonce:
-                raise OIDCException("OIDC authorization URL is missing state or nonce")
+        authorization_url = oidc_login.get_redirect_object(
+            target_link_uri
+        ).get_redirect_url()
+        parsed_redirect = urlparse(authorization_url)
+        authorization_params = parse_qs(parsed_redirect.query)
+        state = authorization_params.get("state", [None])[0]
+        nonce = authorization_params.get("nonce", [None])[0]
+        if not state or not nonce:
+            raise OIDCException("OIDC authorization URL is missing state or nonce")
 
-            if (
-                parsed_redirect.scheme not in ("http", "https")
-                or not parsed_redirect.netloc
-            ):
-                raise OIDCException("OIDC authorization URL has an invalid origin")
+        if (
+            parsed_redirect.scheme not in ("http", "https")
+            or not parsed_redirect.netloc
+        ):
+            raise OIDCException("OIDC authorization URL has an invalid origin")
 
-            platform_origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
-            store_post_message_initiation(
-                state,
-                nonce,
-                storage_target,
-                platform_origin,
-            )
+        platform_origin = f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
+        store_post_message_initiation(
+            state,
+            nonce,
+            storage_target,
+            platform_origin,
+        )
 
-            return render(
-                request,
-                "oidc_put.html",
-                {
-                    "params": json.dumps(params),
-                    "redirect_uri": authorization_url,
-                },
-            )
+        print("NONCE:", nonce)
 
-        return super().get_oidc_response(request, registration_uuid, params)
+        return render(
+            request,
+            "oidc_put.html",
+            {
+                "params": json.dumps(params),
+                "redirect_uri": authorization_url,
+            },
+        )
