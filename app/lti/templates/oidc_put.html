@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8"/>
         <meta name="viewport" content="width=device-width" />
-        <title>LTI OIDC Auth</title>
+        <title>LTI OIDC Auth - Put</title>
         <style>
             p {
               font-family: Arial, Helvetica, sans-serif;
@@ -34,26 +34,11 @@
                 let messageId = self.crypto.randomUUID();
 
                 window.addEventListener('message', function (event) {
-                    // This isn't a message we're expecting
-                    if (typeof event.data !== "object"){
-                        return;
-                    }
-
-                    // Validate it's the response type you expect
-                    if (event.data.subject !== "lti.put_data.response") {
-                        return;
-                    }
-
-                    // Validate the message id matches the id you sent
-                    if (event.data.message_id !== messageId) {
-                        // this is not the response you're looking for
-                        return;
-                    }
-
-                    // Validate that the event's origin is the same as the derived platform origin
-                    if (event.origin !== platformOrigin) {
-                        return;
-                    }
+                    if (typeof event.data !== "object") return
+                    if (event.data.subject !== "lti.put_data.response") return
+                    if (event.data.message_id !== messageId) return
+                    if (event.origin !== platformOrigin) returns
+                    if (event.source !== targetFrame) return
 
                     // handle errors
                     if (event.data.error){
