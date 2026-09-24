@@ -81,8 +81,6 @@ class MateriaOIDCLoginInitView(OIDCLoginInitView):
             platform_origin,
         )
 
-        print("NONCE:", nonce)
-
         return render(
             request,
             "oidc_put.html",
